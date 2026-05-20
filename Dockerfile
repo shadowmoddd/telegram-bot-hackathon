@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -12,7 +12,7 @@ COPY . .
 # Create data directory
 RUN mkdir -p data
 
-# Populate DB at build time
+# Populate DB at build time (seed + Stepik API)
 RUN python scripts/populate_db.py
 
 CMD ["python", "-m", "bot.main"]
