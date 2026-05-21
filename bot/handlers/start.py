@@ -1,51 +1,38 @@
-from aiogram import Router
+from aiogram import F, Router
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message
+from loguru import logger
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from bot.config import TOPICS, LEVELS, FORMATS, TIME_OPTIONS
-from bot.keyboards.inline import topics_kb, profile_edit_kb, start_route_kb
-from bot.states import ProfileForm
-from recommender.engine import get_or_create_user, get_user, get_route
+from bot.db.repository import UserRepository
+from bot.keyboards.inline import roadmap_start_keyboard
+from bot.utils import escape
 
 router = Router()
 
 
 @router.message(CommandStart())
-async def cmd_start(message: Message, state: FSMContext):
+async def cmd_start(message: Message, state: FSMContext, session: AsyncSession) -> None:
     await state.clear()
-    user = get_user(message.from_user.id)
+    user_repo = UserRepository(session)
+    await user_repo.get_or_create(
+        telegram_id=message.from_user.id,
+        username=message.from_user.username,
+        first_name=message.from_user.first_name,
+    )
+    logger.info(f"User started bot: telegram_id={message.from_user.id}")
 
-    if user and user.topic:
-        topic_label = TOPICS.get(user.topic, user.topic)
-        level_label = LEVELS.get(user.level, user.level)
-        format_label = FORMATS.get(user.format_pref, user.format_pref)
-        time_label = TIME_OPTIONS.get(user.time_available, user.time_available)
+    await message.answer(
+        f"Привет, <b>{escape(message.from_user.first_name)}</b> 👋\n\n"
+        "Хочешь освоить новую профессию или прокачать навыки, но не знаешь с чего начать?\n\n"
+        "<b>Progressors Learning</b> составит персональный маршрут под твой уровень и цель — "
+        "только бесплатные материалы на русском языке, только то что реально нужно.\n\n"
+        "Открывай приложение 👇",
+        reply_markup=roadmap_start_keyboard(),
+    )
 
-        route = get_route(user.id)
-        done = sum(1 for item, _ in route if item.status == "completed")
-        total = len(route)
 
-        await message.answer(
-            f"👋 С возвращением, <b>{message.from_user.first_name}</b>!\n\n"
-            f"📌 <b>Твой профиль:</b>\n"
-            f"• Тема: {topic_label}\n"
-            f"• Уровень: {level_label}\n"
-            f"• Формат: {format_label}\n"
-            f"• Время: {time_label}\n\n"
-            f"📚 Прогресс по маршруту: {done}/{total} ресурсов изучено",
-            parse_mode="HTML",
-            reply_markup=start_route_kb() if total > 0 else profile_edit_kb(),
-        )
-    else:
-        get_or_create_user(message.from_user.id, message.from_user.username)
-        await message.answer(
-            f"👋 Привет, <b>{message.from_user.first_name}</b>!\n\n"
-            "Я — <b>ПутеводительЗнаний</b> 🧭\n\n"
-            "Помогу составить персональный учебный маршрут из <b>бесплатных русскоязычных</b> "
-            "ресурсов: курсов, видео и статей.\n\n"
-            "Давай начнём! Выбери тему, которую хочешь освоить 👇",
-            parse_mode="HTML",
-            reply_markup=topics_kb(),
-        )
-        await state.set_state(ProfileForm.topic)
+@router.message(F.text == "🔃 Перезапустить бота")
+async def cmd_restart(message: Message, state: FSMContext, session: AsyncSession) -> None:
+    await cmd_start(message, state, session)

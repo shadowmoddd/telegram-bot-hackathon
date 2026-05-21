@@ -1,8 +1,11 @@
 .env
-.venv/
-venv/
-__pycache__/
-*.pyc
 .git/
-data/resources.db
-*.log
+.gitignore
+miniapp/
+tests/
+*.pyc
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+data/*.db
+data/*.sqlite
